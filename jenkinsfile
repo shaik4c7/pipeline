@@ -1,0 +1,62 @@
+pipeline {
+    agent{
+        label 'node1'
+    }
+    stages{
+        stage('Pipeline job'){
+            steps{
+                echo "WELCOME to DEVOPS+GCP"
+        
+            }
+        }
+        stage('checkout'){
+            steps{
+                checkout([$class: 'GitSCM', branches: [[name: '*/main']], extensions: [], userRemoteConfigs: [[credentialsId: 'github', url: 'https://github.com/shaik4c7/meshow.git']]])
+            }
+        }
+        stage('BUILD'){
+            steps{
+                sh 'mvn package -f pom.xml'
+            }
+        }
+        stage('DEV ENV DEPLOY'){
+            steps{
+                deploy adapters: [tomcat9(credentialsId: 'TOMCAT', path: '', url: 'http://34.125.5.175:8080/')], contextPath: 'flipkart', war: 'target/flipkart.war'
+            }
+        }
+        stage('Approvals to Deployment in PRE-PROD env'){
+            steps{
+                echo "Taking approval from Manager to deploy war in STAGE env"
+                timeout(time: 7, unit: 'DAYS') {
+                input message: 'Do you want to deploy  wars in STAGE env?', submitter: 'reshma'
+            }
+            }
+        }
+        stage('STAGE-ENV-DEPLOY'){
+            steps{
+                deploy adapters: [tomcat9(credentialsId: 'TOMCAT', path: '', url: 'http://34.125.5.175:8080')], contextPath: 'flipkart', war: 'target/flipkart.war'
+            }
+        }
+        stage('PRE-PROD-ENV-DEPLOY'){
+            steps{
+                echo "Taking approval from Manager to deploy war in pre-prod evn"
+                timeout(time: 7, unit: 'DAYS') {
+                input message: 'Do you want to deploy  wars in pre-prod env?', submitter: 'reshma'
+            }
+            }
+        }
+        stage('Approvals to NEXUS REPO'){
+            steps{
+                echo "Taking approval from Manager to deploy war Nexus Repo"
+                timeout(time: 7, unit: 'DAYS') {
+                input message: 'Do you approve to deploy war to NEXUS REPO?', submitter: 'reshma'
+           }
+           }
+        }
+        stage('Nexus'){
+            steps{
+                nexusArtifactUploader artifacts: [[artifactId: 'flipkart', classifier: '', file: 'target/flipkart.war', type: 'war']], credentialsId: 'nexus', groupId: 'com.tcs', nexusUrl: '34.125.5.175:8081', nexusVersion: 'nexus3', protocol: 'http', repository: 'BATECH6', version: '1.0-SNAPSHOT'
+            }
+        }
+    }
+}
